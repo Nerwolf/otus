@@ -1,0 +1,172 @@
+version: '3.8'
+
+networks:
+  monitoring:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  wordpress_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+  # ============ MYSQL ============
+  mysql:
+    image: mysql:${MYSQL_VERSION:-8.0}
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ CMS (WordPress) ============
+  wordpress:
+    build: ./wordpress
+    container_name: wordpress
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST:-mysql}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+    volumes:
+      - wordpress_data:/var/www/html
+    networks:
+      - backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ============ PHP-FPM Exporter ============
+  php-fpm-exporter:
+    image: hipages/php-fpm_exporter:latest
+    container_name: php-fpm-exporter
+    restart: unless-stopped
+    environment:
+      PHP_FPM_SCRAPE_URI: "tcp://wordpress:9000/status"
+      PHP_FPM_FIX_PROCESS_COUNT: "true"
+    networks:
+      - backend
+      - monitoring
+    depends_on:
+      - wordpress
+
+  # ============ HAProxy ============
+  haproxy:
+    image: haproxy:${HAPROXY_VERSION:-2.8}
+    container_name: haproxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8404:8404"  # HAProxy stats
+    environment:
+      HAPROXY_STATS_USER: ${HAPROXY_STATS_USER}
+      HAPROXY_STATS_PASSWORD: ${HAPROXY_STATS_PASSWORD}
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - backend
+      - monitoring
+    depends_on:
+      - wordpress
+
+  # ============ MySQL Exporter ============
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysql-exporter
+    restart: unless-stopped
+    volumes:
+      - ./.my.cnf:/.my.cnf:ro
+    command:
+      - '--config.my-cnf=/.my.cnf'
+    networks:
+      - backend
+      - monitoring
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ============ Node Exporter (VM метрики) ============
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+
+  # ============ Blackbox Exporter ============
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    networks:
+      - monitoring
+
+  # ============ Prometheus ============
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-latest}
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+      - backend 
+    depends_on:
+      - node-exporter
+      - mysql-exporter
+      - php-fpm-exporter
+      - blackbox-exporter
+
+  # ============ Grafana (опционально для визуализации) ============
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-latest}
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-simple-json-datasource"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
