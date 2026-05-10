@@ -1,7 +1,7 @@
 # Monitoring System for WordPress CMS
 
 ## Описание
-Мониторинг CMS WordPress (PHP-FPM + MySQL + HAProxy) с использованием Prometheus и Grafana. Разворачивается через docker-compose. Необходимо добавить переменные в файл `.env`
+Мониторинг CMS WordPress (PHP-FPM + MySQL + HAProxy) с использованием Prometheus и Grafana. Разворачивается через docker-compose. Необходимо добавить переменные в файл `.env` и `.my.cnf`
 
 ## Компоненты
 
