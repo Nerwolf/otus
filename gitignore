@@ -1,9 +1,0 @@
-# .gitignore
-.env
-.ansible
-prometheus_data/
-mysql_data/
-wordpress_data/
-grafana_data/
-*.log
-.my.cnf
