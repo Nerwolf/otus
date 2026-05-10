@@ -6,3 +6,4 @@ mysql_data/
 wordpress_data/
 grafana_data/
 *.log
+.my.cnf
