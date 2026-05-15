@@ -1,39 +1,38 @@
 global:
-  scrape_interval: 5s  # Сбор метрик каждые 5 секунд
+  scrape_interval: 5s
   evaluation_interval: 5s
   external_labels:
     monitor: 'cms-monitoring'
+    site: prod
+
+remote_write:
+  - url: http://victoria-metrics:8428/api/v1/write
 
 scrape_configs:
-  # Метрики самой VM
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
           instance: 'vm'
 
-  # Метрики MySQL
   - job_name: 'mysql'
     static_configs:
       - targets: ['mysql-exporter:9104']
         labels:
           instance: 'mysql'
 
-  # Метрики PHP-FPM
   - job_name: 'php-fpm'
     static_configs:
       - targets: ['php-fpm-exporter:9253']
         labels:
           instance: 'wordpress-php'
 
-  # Метрики HAProxy
   - job_name: 'haproxy'
     static_configs:
       - targets: ['haproxy:8404']
         labels:
           instance: 'haproxy'
 
-  # Blackbox проверки доступности
   - job_name: 'blackbox-http'
     metrics_path: /probe
     params:
@@ -52,7 +51,6 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Blackbox TCP проверки
   - job_name: 'blackbox-tcp'
     metrics_path: /probe
     params:
@@ -62,8 +60,6 @@ scrape_configs:
           - 'mysql:3306'
           - 'wordpress:9000'
           - 'haproxy:80'
-        labels:
-          instance: '${1}'
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -74,7 +70,6 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Сам Prometheus
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']

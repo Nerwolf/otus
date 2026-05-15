@@ -12,6 +12,7 @@
 | HAProxy | 80 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
+| VictoriaMetrics | 8428 |
 
 ## Exporters
 
@@ -20,3 +21,13 @@
 - php-fpm-exporter
 - haproxy metrics
 - blackbox-exporter
+
+## ДЗ 
+### Задание
+    Для Prometheus необходимо установить отдельно хранилище метрик (VictoriaMetrics, Grafana Mimir, Thanos, и т. д.).
+    Во время записи метрики в хранилище Prometheus должен дополнительно добавлять лейбл site: prod.
+
+### Выполнение
+     в конфиг файл  prometheus/prometheus.yml добавлено site: prod и remote_write
+     в docker-compose добавлена victoria-metrics, глубина хранения 14 дней через переменную retentionPeriod
+

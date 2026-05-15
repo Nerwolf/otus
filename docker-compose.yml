@@ -11,6 +11,7 @@ volumes:
   wordpress_data:
   prometheus_data:
   grafana_data:
+  victoria-metrics-data:   
 
 services:
   # ============ MYSQL ============
@@ -35,7 +36,7 @@ services:
 
   # ============ CMS (WordPress) ============
   wordpress:
-    build: ./wordpress
+    image: wordpress:latest
     container_name: wordpress
     restart: unless-stopped
     environment:
@@ -152,7 +153,7 @@ services:
       - php-fpm-exporter
       - blackbox-exporter
 
-  # ============ Grafana (опционально для визуализации) ============
+  # ============ Grafana  ============
   grafana:
     image: grafana/grafana:${GRAFANA_VERSION:-latest}
     container_name: grafana
@@ -170,3 +171,20 @@ services:
       - monitoring
     depends_on:
       - prometheus
+# ============ VictoriaMetrics ============
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.143.0
+    container_name: victoria-metrics
+    restart: unless-stopped
+    ports:
+      - "8428:8428"  
+    volumes:
+      - victoria-metrics-data:/victoria-metrics-data
+    command:
+      - '-storageDataPath=/victoria-metrics-data'
+      - '--selfScrapeInterval=5s'  
+      - '--retentionPeriod=14d'
+    
+    networks:
+      - monitoring
+ 
